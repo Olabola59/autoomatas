@@ -21,10 +21,11 @@ let finishedUsers = 0; // Conteo de usuarios que han terminado
 io.on("connection", (socket) => {
   console.log(`Usuario conectado: ${socket.id}`);
 
-  // Maneja el registro de un nuevo usuario
+  // Registro de usuario
   socket.on("join", ({ userName }) => {
     users[socket.id] = { userName, answers: [] };
     console.log(`Usuario registrado: ${userName}`);
+    io.emit("userJoined", Object.values(users).map(user => user.userName));
   });
 
   // Maneja las respuestas de los usuarios
@@ -32,7 +33,7 @@ io.on("connection", (socket) => {
     if (users[socket.id]) {
       users[socket.id].answers.push(answer);
 
-      // Calcula el progreso parcial entre los usuarios
+      // Calcula el progreso parcial
       const userEntries = Object.entries(users);
       if (userEntries.length === 2) {
         const [id1, user1] = userEntries[0];
@@ -59,26 +60,22 @@ io.on("connection", (socket) => {
       io.emit("bothFinished"); // Notifica que todos han terminado
       io.emit("resultsReady", { user1: user1.userName, user2: user2.userName, match });
     } else {
-      // Notifica que estamos esperando a más usuarios
       io.emit("waitingForOthers");
     }
   });
 
-  // Reinicia el estado si un usuario se desconecta
+  // Maneja la desconexión
   socket.on("disconnect", () => {
     console.log(`Usuario desconectado: ${socket.id}`);
     if (users[socket.id]) {
       delete users[socket.id];
       finishedUsers = Math.max(finishedUsers - 1, 0);
     }
-
-    if (Object.keys(users).length === 0) {
-      finishedUsers = 0; // Reinicia el estado si no quedan usuarios conectados
-    }
+    io.emit("userDisconnected", Object.values(users).map(user => user.userName));
   });
 });
 
-// Calcula el porcentaje de coincidencia entre respuestas
+// Calcula el porcentaje de coincidencia
 const calculateMatch = (answers1, answers2) => {
   let matches = 0;
   const total = Math.min(answers1.length, answers2.length);
@@ -91,11 +88,6 @@ const calculateMatch = (answers1, answers2) => {
 
   return total > 0 ? ((matches / total) * 100).toFixed(2) : 0;
 };
-
-// Maneja rutas no específicas y sirve el cliente React
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
 
 server.listen(3000, () => {
   console.log("Servidor corriendo en http://localhost:3000");
